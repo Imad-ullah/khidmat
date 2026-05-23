@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: khidmatapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: khidmatapp
+      POSTGRES_PASSWORD: khidmatapp_password
+      POSTGRES_DB: khidmatapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U khidmatapp -d khidmatapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: khidmatapp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: node:20
+    container_name: khidmatapp-backend
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://khidmatapp:khidmatapp_password@postgres:5432/khidmatapp?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: development_access_secret
+      JWT_REFRESH_SECRET: development_refresh_secret
+      FRONTEND_ORIGIN: http://localhost:5173
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../../backend:/app
+      - backend_node_modules:/app/node_modules
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_node_modules:

@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+build/
+dist/
+.dart_tool/
+*.g.dart
+coverage/
+.DS_Store
+Thumbs.db
+*.log
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
