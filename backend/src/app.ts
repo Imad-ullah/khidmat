@@ -9,7 +9,16 @@ import { initSentry } from './config/sentry';
 import { errorHandler } from './middleware/errorHandler';
 import { globalRateLimiter } from './middleware/rateLimiter';
 import { notFoundHandler } from './middleware/notFoundHandler';
+import { authRouter } from './modules/auth/auth.routes';
+import { adminRouter } from './modules/admin/admin.routes';
+import { bookingRouter } from './modules/bookings/booking.routes';
+import { chatRouter } from './modules/chat/chat.routes';
+import { adminDisputeRouter, disputeRouter } from './modules/disputes/dispute.routes';
 import { healthRouter } from './modules/health/health.routes';
+import { jobPostRouter } from './modules/job-posts/jobPost.routes';
+import { notificationRouter } from './modules/notifications/notification.routes';
+import { adminProviderRouter, providerRouter } from './modules/providers/provider.routes';
+import { providerReviewRouter, reviewRouter } from './modules/reviews/review.routes';
 
 export const createApp = (): Express => {
   initSentry();
@@ -29,6 +38,18 @@ export const createApp = (): Express => {
   app.use(globalRateLimiter);
 
   app.use('/api/v1/health', healthRouter);
+  app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/admin', adminRouter);
+  app.use('/api/v1/bookings', bookingRouter);
+  app.use('/api/v1/chat', chatRouter);
+  app.use('/api/v1/disputes', disputeRouter);
+  app.use('/api/v1/job-posts', jobPostRouter);
+  app.use('/api/v1/notifications', notificationRouter);
+  app.use('/api/v1/providers', providerRouter);
+  app.use('/api/v1/providers', providerReviewRouter);
+  app.use('/api/v1/reviews', reviewRouter);
+  app.use('/api/v1/admin', adminProviderRouter);
+  app.use('/api/v1/admin', adminDisputeRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

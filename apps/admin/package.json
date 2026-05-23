@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "node scripts/serve-admin.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.40.0",

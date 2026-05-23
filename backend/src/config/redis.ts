@@ -8,11 +8,18 @@ export const redis = new Redis(env.redisUrl, {
 
 export const pingRedis = async (): Promise<'connected' | 'unavailable'> => {
   try {
-    if (redis.status === 'wait') {
-      await redis.connect();
-    }
+    await Promise.race([
+      (async () => {
+        if (redis.status === 'wait') {
+          await redis.connect();
+        }
 
-    await redis.ping();
+        await redis.ping();
+      })(),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Redis ping timed out')), 1000);
+      }),
+    ]);
     return 'connected';
   } catch {
     return 'unavailable';
