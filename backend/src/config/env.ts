@@ -20,6 +20,7 @@ export const env = {
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   sentryDsn: process.env.SENTRY_DSN,
+  sentryTestToken: process.env.SENTRY_TEST_TOKEN,
 };
 
 export const isProduction = env.nodeEnv === 'production';

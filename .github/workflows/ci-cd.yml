@@ -1,0 +1,265 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  NODE_VERSION: "20"
+  FLUTTER_VERSION: "3.35.0"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-backend
+
+jobs:
+  lint:
+    name: Stage 1 - Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            apps/admin/package-lock.json
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install admin dependencies
+        working-directory: apps/admin
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: ESLint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: ESLint admin
+        working-directory: apps/admin
+        run: npm run lint
+
+      - name: Dart analyzer
+        working-directory: apps/mobile
+        run: flutter analyze
+
+  test:
+    name: Stage 2 - Test
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: khidmatapp_test
+          POSTGRES_PASSWORD: khidmatapp_test_password
+          POSTGRES_DB: khidmatapp_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U khidmatapp_test -d khidmatapp_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      DATABASE_URL: postgresql://khidmatapp_test:khidmatapp_test_password@localhost:5433/khidmatapp_test?schema=public
+      TEST_DATABASE_URL: postgresql://khidmatapp_test:khidmatapp_test_password@localhost:5433/khidmatapp_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci_access_secret_32_chars_minimum
+      JWT_REFRESH_SECRET: ci_refresh_secret_32_chars_minimum
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      BCRYPT_SALT_ROUNDS: 4
+      AWS_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: ci
+      AWS_SECRET_ACCESS_KEY: ci
+      AWS_S3_BUCKET_NAME: ci
+      AWS_S3_PRIVATE_BUCKET: ci-private
+      AWS_S3_PUBLIC_BUCKET: ci-public
+      FIREBASE_PROJECT_ID: ci
+      FIREBASE_CLIENT_EMAIL: ci@example.com
+      FIREBASE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nci\n-----END PRIVATE KEY-----\n"
+      SENTRY_DSN: ""
+      CORS_ORIGIN: http://localhost:5173
+      FRONTEND_ORIGIN: http://localhost:5173
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Validate Prisma schema
+        working-directory: backend
+        run: npx prisma validate
+
+      - name: Apply test database migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Jest coverage
+        working-directory: backend
+        run: npm run test:coverage -- --runInBand
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: npm audit --audit-level=high
+
+  build:
+    name: Stage 3 - Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            apps/admin/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npm run build
+
+      - name: Build Flutter APK
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Build admin panel
+        working-directory: apps/admin
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload Flutter APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: khidmatapp-release-apk
+          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload admin build
+        uses: actions/upload-artifact@v4
+        with:
+          name: khidmatapp-admin-dist
+          path: apps/admin/dist
+
+  deploy:
+    name: Stage 4 - Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      DIGITALOCEAN_APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
+      PRODUCTION_HEALTH_URL: ${{ secrets.PRODUCTION_HEALTH_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Deploy production migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Trigger DigitalOcean deployment
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${DIGITALOCEAN_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.digitalocean.com/v2/apps/${DIGITALOCEAN_APP_ID}/deployments"
+
+      - name: Wait for deployment
+        run: sleep 60
+
+      - name: Production health check
+        run: curl -fsS "${PRODUCTION_HEALTH_URL:-https://api.khidmatapp.pk/api/v1/health}"

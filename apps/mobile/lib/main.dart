@@ -26,9 +26,19 @@ final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   return AuthController(ref);
 });
 
+final authDioProvider = Provider<Dio>((ref) {
+  return Dio(
+    BaseOptions(
+      baseUrl: ref.watch(apiBaseUrlProvider),
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 8),
+    ),
+  );
+});
+
 final dioProvider = Provider<Dio>((ref) {
   final baseUrl = ref.watch(apiBaseUrlProvider);
-  final session = ref.watch(authControllerProvider);
+  ref.watch(authControllerProvider.select((state) => state.accessToken));
   final dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
@@ -73,8 +83,6 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
-  // Keep provider rebuilding intentional when auth/base URL changes.
-  session.accessToken;
   return dio;
 });
 
@@ -202,7 +210,7 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> loginWithOtp(String phone, String otp) async {
-    final dio = ref.read(dioProvider);
+    final dio = ref.read(authDioProvider);
     await dio.post<Map<String, dynamic>>('/auth/otp/send', data: {'phone': phone});
     final response = await dio.post<Map<String, dynamic>>(
       '/auth/otp/verify',
@@ -219,7 +227,7 @@ class AuthController extends StateNotifier<AuthState> {
     String? email,
     String? password,
   }) async {
-    final dio = ref.read(dioProvider);
+    final dio = ref.read(authDioProvider);
     final response = await dio.post<Map<String, dynamic>>(
       '/auth/register',
       data: {
@@ -237,9 +245,14 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     final refreshToken = state.refreshToken;
+    final accessToken = state.accessToken;
     try {
       if (refreshToken != null) {
-        await ref.read(dioProvider).post<Map<String, dynamic>>('/auth/logout', data: {'refreshToken': refreshToken});
+        await ref.read(authDioProvider).post<Map<String, dynamic>>(
+              '/auth/logout',
+              data: {'refreshToken': refreshToken},
+              options: Options(headers: accessToken == null ? null : {'Authorization': 'Bearer $accessToken'}),
+            );
       }
     } catch (_) {
       // A logout should clear the device even if the API is offline.
@@ -253,10 +266,11 @@ class AuthController extends StateNotifier<AuthState> {
       final messaging = FirebaseMessaging.instance;
       final token = await messaging.getToken();
       if (token != null) {
-        await ref.read(dioProvider).post<Map<String, dynamic>>(
-          '/notifications/device-tokens',
-          data: {'token': token, 'platform': 'android'},
-        );
+        await ref.read(authDioProvider).post<Map<String, dynamic>>(
+              '/notifications/device-tokens',
+              data: {'token': token, 'platform': 'android'},
+              options: Options(headers: {'Authorization': 'Bearer ${state.accessToken}'}),
+            );
       }
     } catch (_) {
       // Firebase config is optional while the product is under local development.

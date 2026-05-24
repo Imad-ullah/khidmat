@@ -19,6 +19,7 @@ import { jobPostRouter } from './modules/job-posts/jobPost.routes';
 import { notificationRouter } from './modules/notifications/notification.routes';
 import { adminProviderRouter, providerRouter } from './modules/providers/provider.routes';
 import { providerReviewRouter, reviewRouter } from './modules/reviews/review.routes';
+import { AppError } from './utils/appError';
 
 export const createApp = (): Express => {
   initSentry();
@@ -50,6 +51,14 @@ export const createApp = (): Express => {
   app.use('/api/v1/reviews', reviewRouter);
   app.use('/api/v1/admin', adminProviderRouter);
   app.use('/api/v1/admin', adminDisputeRouter);
+  app.get('/api/v1/sentry-test', (request, _response, next) => {
+    if (env.sentryTestToken === undefined || request.header('x-sentry-test-token') !== env.sentryTestToken) {
+      next(new AppError('Not found', 404, 'NOT_FOUND'));
+      return;
+    }
+
+    next(new Error('KhidmatApp Sentry production smoke test'));
+  });
 
   app.use(notFoundHandler);
   app.use(errorHandler);

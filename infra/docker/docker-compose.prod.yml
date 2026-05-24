@@ -1,7 +1,62 @@
 services:
   backend:
-    image: khidmatapp-backend:latest
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: production
+    image: ${DOCKER_IMAGE:-ghcr.io/your-org/khidmatapp-backend:latest}
     restart: unless-stopped
     env_file:
       - ../../backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+    expose:
+      - "4000"
+    networks:
+      - khidmatapp
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      DOMAIN_NAME: ${DOMAIN_NAME:-api.khidmatapp.pk}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - certbot_www:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    networks:
+      - khidmatapp
+
+  certbot:
+    image: certbot/certbot:v2.11.0
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    networks:
+      - khidmatapp
+
+networks:
+  khidmatapp:
+    driver: bridge
+
+volumes:
+  certbot_www:
+  certbot_certs:

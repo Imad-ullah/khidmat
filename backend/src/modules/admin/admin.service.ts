@@ -1,4 +1,3 @@
-import { BookingStatus } from '@prisma/client';
 import { prisma } from '../../prisma/client';
 import { getPagination } from '../../utils/pagination';
 import type {

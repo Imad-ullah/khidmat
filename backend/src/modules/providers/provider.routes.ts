@@ -37,7 +37,7 @@ const onboardingSchemas = new Map<number, typeof onboardStepOneSchema | typeof o
   [4, onboardStepFourSchema],
 ]);
 
-const getUploadedFile = (files: Request['files'], fieldName: string): Express.Multer.File | undefined => {
+const getUploadedFile = (files: Request['files'], fieldName: string) => {
   if (files === undefined || Array.isArray(files)) {
     return undefined;
   }

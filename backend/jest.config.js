@@ -14,6 +14,13 @@ module.exports = {
     'src/middleware/authorize.ts',
   ],
   coveragePathIgnorePatterns: ['auth.routes.ts'],
+  coverageThreshold: {
+    global: {
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+  },
   setupFiles: ['<rootDir>/src/test/setupEnv.ts'],
   clearMocks: true,
 };

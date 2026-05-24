@@ -6,7 +6,6 @@ import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import {
   BadgeCheck,
   Ban,
-  Bell,
   BookOpenCheck,
   Check,
   ClipboardList,

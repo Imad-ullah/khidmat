@@ -1,8 +1,6 @@
-import bcrypt from 'bcrypt';
 import request from 'supertest';
 import { AccountStatus, BookingStatus, Role, VerificationStatus } from '@prisma/client';
 import { createApp } from '../../app';
-import { env } from '../../config/env';
 import { closeCompletedBookings, expireOpenJobPosts, expirePendingBookings } from '../../jobs/systemJobs';
 import { prisma } from '../../prisma/client';
 
