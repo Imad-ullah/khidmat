@@ -1,4 +1,58 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-khidmatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-khidmatapp_password}
+      POSTGRES_DB: ${POSTGRES_DB:-khidmatapp}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - khidmatapp
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - khidmatapp
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: migrations
+    image: ${DOCKER_IMAGE:-ghcr.io/your-org/khidmatapp-backend:latest}-migrations
+    env_file:
+      - ../../backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-khidmatapp}:${POSTGRES_PASSWORD:-khidmatapp_password}@postgres:5432/${POSTGRES_DB:-khidmatapp}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - khidmatapp
+    profiles:
+      - tools
+
   backend:
     build:
       context: ../../backend
@@ -11,8 +65,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-khidmatapp}:${POSTGRES_PASSWORD:-khidmatapp_password}@postgres:5432/${POSTGRES_DB:-khidmatapp}?schema=public
+      REDIS_URL: redis://redis:6379
     expose:
       - "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - khidmatapp
     healthcheck:
@@ -58,5 +119,7 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data:
+  redis_data:
   certbot_www:
   certbot_certs:

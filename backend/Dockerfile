@@ -15,6 +15,11 @@ RUN npx prisma generate
 RUN npm run build
 RUN npm prune --omit=dev
 
+FROM deps AS migrations
+WORKDIR /app
+COPY prisma ./prisma
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
